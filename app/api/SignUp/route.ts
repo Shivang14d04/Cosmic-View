@@ -1,6 +1,7 @@
 import dbConnect from "@/lib/dbConnect";
 import UserModel from "@/models/User";
 import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
 
 export async function POST(request: Request) {
   await dbConnect();
@@ -49,15 +50,40 @@ export async function POST(request: Request) {
       email,
       password: hashedPassword,
     });
-    return Response.json(
+
+    const token = jwt.sign(
+      {
+        id: newUser._id,
+        email: newUser.email,
+        userName: newUser.userName,
+      },
+      process.env.JWT_SECRET,
+      {
+        expiresIn: "7d",
+      }
+    );
+
+    const response = Response.json(
       {
         success: true,
         message: "User registered successfully",
+        user: {
+          id: newUser._id,
+          email: newUser.email,
+          userName: newUser.userName,
+        },
       },
       {
         status: 200,
       }
     );
+
+    response.headers.set(
+      "Set-Cookie",
+      `token=${token} ;HttpOnly;Secure;Path=/;SameSite=Strict;Max-Age=604800`
+    );
+
+    return response;
   } catch (error) {
     console.log("Error while registering user", error);
     return Response.json(

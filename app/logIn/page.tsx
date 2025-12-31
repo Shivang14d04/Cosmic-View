@@ -10,26 +10,33 @@ export default function LoginPage() {
   const router = useRouter();
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    setLoading(true);
+    try {
+      const res = await fetch("/api/logIn", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
 
-    const res = await fetch("/api/logIn", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
-    });
+      const data = await res.json();
 
-    const data = await res.json();
+      if (!res.ok) {
+        setError(data.message || "Login failed");
+        return;
+      }
 
-    if (!res.ok) {
-      setError(data.message || "Login failed");
-      return;
+      router.refresh();
+      setTimeout(() => {
+        router.push("/dashboard");
+      }, 1500);
+    } catch {
+      setLoading(false);
     }
-
-    router.refresh(); // ensures session is updated
-    router.push("/dashboard");
   }
 
   return (
@@ -72,9 +79,17 @@ export default function LoginPage() {
           {error && <p className="text-sm text-red-400 text-center">{error}</p>}
 
           <Button
+            disabled={loading}
             type="submit"
+            aria-busy={loading}
             className="w-full bg-white text-black hover:bg-white/90"
           >
+            {loading && (
+              <span
+                aria-hidden="true"
+                className="h-4 w-4 animate-spin rounded-full border-2 border-black/30 border-t-black"
+              />
+            )}
             Log In
           </Button>
         </form>

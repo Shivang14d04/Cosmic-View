@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { NAV_ITEMS } from "@/lib/nav-items";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -48,13 +49,23 @@ export default function Navbar() {
         {/* Logo */}
         <Link
           href="/"
-          className="text-lg text-white font-semibold tracking-wide"
+          className="flex items-center gap-2 text-lg text-white font-semibold tracking-wide"
         >
-          CosmicView
+          <span className="relative h-8 w-8 overflow-hidden rounded-md ">
+            <Image
+              src="/images/nasa2.jpg"
+              alt="CosmicView logo"
+              fill
+              sizes="32px"
+              className="object-cover brightness-130 contrast-150 saturate-150"
+              priority
+            />
+          </span>
+          <span>CosmicView</span>
         </Link>
 
         {/* Center Navigation */}
-        <div className="hidden md:flex items-center gap-6">
+        <div className="hidden md:flex items-center gap-10">
           {NAV_ITEMS.map((item) => {
             if (item.auth && !user) return null;
 

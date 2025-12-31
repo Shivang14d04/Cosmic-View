@@ -14,30 +14,32 @@ export default function SignupPage() {
     password: "",
   });
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const [loading, setLoading] = useState(false);
 
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    setSuccess("");
+    setLoading(true);
+    try {
+      const res = await fetch("/api/SignUp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
 
-    const res = await fetch("/api/SignUp", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
-    });
+      const data = await res.json();
 
-    const data = await res.json();
+      if (!res.ok) {
+        setError(data.message || "Signup failed");
+        return;
+      }
 
-    if (!res.ok) {
-      setError(data.message || "Signup failed");
-      return;
+      setTimeout(() => {
+        router.push("/dashboard");
+      }, 1500);
+    } catch {
+      setLoading(false);
     }
-
-    setSuccess("Account created successfully");
-    setTimeout(() => {
-      router.push("/dashboard");
-    }, 1200);
   }
 
   return (
@@ -85,14 +87,19 @@ export default function SignupPage() {
           />
 
           {error && <p className="text-sm text-red-400 text-center">{error}</p>}
-          {success && (
-            <p className="text-sm text-green-400 text-center">{success}</p>
-          )}
 
           <Button
+            disabled={loading}
+            aria-busy={loading}
             type="submit"
             className="w-full bg-white text-black hover:bg-white/90"
           >
+            {loading && (
+              <span
+                aria-hidden="true"
+                className="h-4 w-4 animate-spin rounded-full border-2 border-black/30 border-t-black"
+              />
+            )}
             Sign Up
           </Button>
         </form>
