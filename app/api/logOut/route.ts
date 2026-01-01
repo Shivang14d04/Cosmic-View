@@ -6,9 +6,14 @@ export async function GET() {
     message: "User logged out successfully",
   });
 
-  response.headers.set(
-    "Set-Cookie",
-    `token= ; HttpOnly; Secure; Path=/; SameSite=Strict; Max-Age=0`
-  );
+  response.cookies.set({
+    name: "token",
+    value: "",
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "strict",
+    path: "/",
+    maxAge: 0,
+  });
   return response;
 }

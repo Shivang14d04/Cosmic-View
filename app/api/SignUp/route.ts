@@ -2,14 +2,23 @@ import dbConnect from "@/lib/dbConnect";
 import UserModel from "@/models/User";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
-  await dbConnect();
   try {
+    await dbConnect();
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      return NextResponse.json(
+        { success: false, message: "Server misconfigured" },
+        { status: 500 }
+      );
+    }
+
     const { userName, email, password } = await request.json();
 
     if (!userName || !email || !password) {
-      return Response.json(
+      return NextResponse.json(
         {
           success: false,
           message: "Username, email and password are required",
@@ -20,7 +29,7 @@ export async function POST(request: Request) {
 
     // ⛔ 2. Validate password length
     if (password.length < 6) {
-      return Response.json(
+      return NextResponse.json(
         {
           success: false,
           message: "Password must be at least 6 characters",
@@ -28,17 +37,18 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+
     const existingUser = await UserModel.findOne({
-      email,
+      $or: [{ email }, { userName }],
     });
     if (existingUser) {
-      return Response.json(
+      return NextResponse.json(
         {
           success: false,
-          message: "User already exits",
+          message: "User already exists",
         },
         {
-          status: 400,
+          status: 409,
         }
       );
     }
@@ -57,13 +67,13 @@ export async function POST(request: Request) {
         email: newUser.email,
         userName: newUser.userName,
       },
-      process.env.JWT_SECRET,
+      jwtSecret,
       {
         expiresIn: "7d",
       }
     );
 
-    const response = Response.json(
+    const response = NextResponse.json(
       {
         success: true,
         message: "User registered successfully",
@@ -74,19 +84,24 @@ export async function POST(request: Request) {
         },
       },
       {
-        status: 200,
+        status: 201,
       }
     );
 
-    response.headers.set(
-      "Set-Cookie",
-      `token=${token} ;HttpOnly;Secure;Path=/;SameSite=Strict;Max-Age=604800`
-    );
+    response.cookies.set({
+      name: "token",
+      value: token,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7,
+    });
 
     return response;
   } catch (error) {
     console.log("Error while registering user", error);
-    return Response.json(
+    return NextResponse.json(
       {
         success: false,
         message: "Error signing Up user",
