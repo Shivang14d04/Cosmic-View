@@ -11,7 +11,7 @@ export default function HomePage() {
   useEffect(() => {
     const timer = setTimeout(() => {
       router.push("/dashboard");
-    }, 9000); // teleport after 2s
+    }, 5000); // teleport after 5s
 
     return () => clearTimeout(timer);
   }, [router]);
