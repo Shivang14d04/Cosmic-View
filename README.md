@@ -1,36 +1,127 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# CosmicView
 
-## Getting Started
+CosmicView is a space-themed web app built with Next.js that lets you explore NASA data with a clean, modern UI.
 
-First, run the development server:
+It includes a simple JWT-based auth flow, a dashboard that pulls **Astronomy Picture of the Day (APOD)** content, and a Mars weather view powered by NASA’s InSight API.
+
+## Features
+
+- **Auth**: Sign up, log in, log out (JWT stored in an HttpOnly cookie)
+- **Dashboard**: NASA APOD (Astronomy Picture of the Day) gallery
+- **Mars**: Latest InSight weather data
+- **UI**: Tailwind + shadcn/ui components
+
+## Tech Stack
+
+- Next.js (App Router)
+- React
+- TypeScript
+- MongoDB + Mongoose
+- JWT (`jsonwebtoken`)
+- Tailwind CSS
+
+## Requirements
+
+- Node.js 18+ (recommended)
+- A MongoDB database (MongoDB Atlas works well)
+- A NASA API key
+
+## Environment Variables
+
+Create a `.env` file in the project root:
+
+```dotenv
+MONGODB_URI=mongodb+srv://<user>:<password>@<cluster>/<db>
+JWT_SECRET=<long-random-secret>
+NASA_API_KEY=<nasa-api-key>
+```
+
+Notes:
+
+- Do **not** commit `.env` to GitHub.
+- On hosting platforms like Vercel, paste the **raw values** (no surrounding quotes).
+
+## Local Setup
+
+1. **Clone the repo**
+
+```bash
+git clone <your-repo-url>
+cd cosmo-view
+```
+
+2. **Install dependencies**
+
+```bash
+npm install
+```
+
+3. **Create `.env`**
+
+Create a `.env` file in the project root and set:
+
+```dotenv
+MONGODB_URI=...
+JWT_SECRET=...
+NASA_API_KEY=...
+```
+
+Where to get the values:
+
+- `MONGODB_URI`: from MongoDB Atlas (Database → Connect → Drivers)
+- `JWT_SECRET`: generate a long random string (32+ chars recommended)
+- `NASA_API_KEY`: from https://api.nasa.gov/
+
+4. **If using MongoDB Atlas, allow your IP**
+
+MongoDB Atlas blocks connections by default. In Atlas:
+
+- Security → Network Access → Add IP Address
+- Add your current public IP (recommended for dev)
+
+5. **Run the dev server**
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+6. **(Optional) Production build locally**
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run build
+npm run start
+```
 
-## Learn More
+## Troubleshooting
 
-To learn more about Next.js, take a look at the following resources:
+### MongoDB connection error
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+If you see `MongooseServerSelectionError`, it’s usually one of:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- Atlas Network Access doesn’t include your IP
+- Wrong username/password in `MONGODB_URI`
+- Cluster is paused
 
-## Deploy on Vercel
+### Hydration mismatch warning in dev
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Some browser extensions (e.g., Grammarly) can inject attributes into the page before React hydrates, which can cause a dev-only hydration warning.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Scripts
+
+- `npm run dev` — start dev server
+- `npm run build` — production build
+- `npm run start` — start production server
+- `npm run lint` — run ESLint
+
+## API Routes
+
+- `POST /api/SignUp` — create account and set auth cookie
+- `POST /api/logIn` — log in and set auth cookie
+- `GET /api/logOut` — clear auth cookie
+- `GET /api/session` — get current session user from JWT
+
+## License
+
+See [LICENSE](LICENSE).
