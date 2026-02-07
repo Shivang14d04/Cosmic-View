@@ -1,0 +1,136 @@
+pipeline {
+    agent any
+
+    environment {
+        IMAGE_NAME = "shivang/cosmic-view"
+        IMAGE_TAG  = "${BUILD_NUMBER}"
+        NODE_IMAGE = "node:20.19.0"
+    }
+
+    stages {
+
+        stage("Fetch Code") {
+            steps {
+                git branch: 'main',
+                    url: 'https://github.com/Shivang14d04/Cosmic-View.git'
+            }
+        }
+
+        stage("Install Dependencies") {
+            steps {
+                sh '''
+                  docker run --rm \
+                    -v $(pwd):/app \
+                    -w /app \
+                    $NODE_IMAGE \
+                    npm ci
+                '''
+            }
+        }
+
+        stage("Trivy Filesystem Scan") {
+            steps {
+                sh '''
+                  docker run --rm \
+                    -v $(pwd):/project \
+                    aquasec/trivy \
+                    fs --severity HIGH,CRITICAL --exit-code 1 /project
+                '''
+            }
+        }
+
+        stage("Build") {
+            steps {
+                withCredentials([
+                    string(credentialsId: 'mongodb-uri', variable: 'MONGODB_URI'),
+                    string(credentialsId: 'jwt-secret', variable: 'JWT_SECRET'),
+                    string(credentialsId: 'nasa-api-key', variable: 'NASA_API_KEY')
+                ]) {
+                    sh '''
+                      docker run --rm \
+                        -e MONGODB_URI=$MONGODB_URI \
+                        -e JWT_SECRET=$JWT_SECRET \
+                        -e NASA_API_KEY=$NASA_API_KEY \
+                        -v $(pwd):/app \
+                        -w /app \
+                        $NODE_IMAGE \
+                        npm run build
+                    '''
+                }
+            }
+        }
+
+        stage("Test") {
+            steps {
+                sh '''
+                  if npm pkg get scripts.test | grep -qv null; then
+                    docker run --rm \
+                      -v $(pwd):/app \
+                      -w /app \
+                      $NODE_IMAGE \
+                      npm test
+                  else
+                    echo "⚠️ No test script defined"
+                  fi
+                '''
+            }
+        }
+
+        stage("SonarQube Analysis (JS/TS)") {
+            steps {
+                withSonarQubeEnv('sonarserver') {
+                    withCredentials([string(credentialsId: 'Sonartoken', variable: 'SONAR_TOKEN')]) {
+                        sh '''
+                          docker run --rm \
+                            -e SONAR_HOST_URL=$SONAR_HOST_URL \
+                            -e SONAR_LOGIN=$SONAR_TOKEN \
+                            -v $(pwd):/app \
+                            -w /app \
+                            sonarsource/sonar-scanner-cli \
+                            -Dsonar.projectKey=cosmic-view \
+                            -Dsonar.sources=. \
+                            -Dsonar.exclusions=node_modules/**
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage("Quality Gate") {
+            steps {
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+
+        stage("Build Docker Image") {
+            steps {
+                sh '''
+                  docker build -t $IMAGE_NAME:$IMAGE_TAG .
+                '''
+            }
+        }
+
+        stage("Trivy Image Scan") {
+            steps {
+                sh '''
+                  docker run --rm \
+                    -v /var/run/docker.sock:/var/run/docker.sock \
+                    aquasec/trivy \
+                    image --severity HIGH,CRITICAL --exit-code 1 \
+                    $IMAGE_NAME:$IMAGE_TAG
+                '''
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "✅ Pipeline executed successfully"
+        }
+        failure {
+            echo "❌ Pipeline failed"
+        }
+    }
+}

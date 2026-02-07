@@ -6,14 +6,15 @@ export async function GET() {
   const cookieStore = await cookies();
   const token = cookieStore.get("token")?.value;
   if (!token) {
-    return NextResponse.json({ user: null }, { status: 401 });
+    // Not having a session is a normal state (logged out), so avoid 401 noise.
+    return NextResponse.json({ user: null }, { status: 200 });
   }
 
   const jwtSecret = process.env.JWT_SECRET;
   if (!jwtSecret) {
     return NextResponse.json(
       { success: false, message: "Server misconfigured" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 
@@ -22,6 +23,6 @@ export async function GET() {
     return NextResponse.json({ user });
   } catch (error) {
     console.log("Error verifying token:", error);
-    return NextResponse.json({ user: null }, { status: 401 });
+    return NextResponse.json({ user: null }, { status: 200 });
   }
 }
