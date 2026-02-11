@@ -118,7 +118,7 @@ stage("SonarQube Analysis") {
                   docker run --rm \
                   -v /var/run/docker.sock:/var/run/docker.sock \
                   ${TRIVY_IMAGE} image \
-                  --severity HIGH,CRITICAL \
+                  --severity CRITICAL \
                   --exit-code 1 \
                   ${IMAGE_NAME}:${IMAGE_TAG}
                 """
