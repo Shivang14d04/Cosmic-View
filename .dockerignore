@@ -1,7 +1,17 @@
 node_modules
 .next
 .git
+.env
 .gitignore
 *.md
 LICENSE
 jenkinsFile
+.dockerignore
+Dockerfile
+coverage
+.github
+.vscode
+*.log
+.env.*
+
+
