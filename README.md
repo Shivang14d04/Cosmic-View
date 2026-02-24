@@ -11,6 +11,20 @@ It includes a simple JWT-based auth flow, a dashboard that pulls **Astronomy Pic
 - **Mars**: Latest InSight weather data
 - **UI**: Tailwind + shadcn/ui components
 
+## Screenshots
+
+### Dashboard
+
+![Dashboard Screenshot 1](./public/screenshots/screenshot1.png)
+
+### Mars Weather View
+
+![Mars Weather Screenshot](./public/screenshots/mars.png)
+
+### Additional View
+
+![Dashboard Screenshot 2](./public/screenshots/screenshot2.png)
+
 ## Tech Stack
 
 - Next.js (App Router)
