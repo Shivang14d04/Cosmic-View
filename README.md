@@ -1,8 +1,10 @@
 # CosmicView
 
-CosmicView is a space-themed web app built with Next.js that lets you explore NASA data with a clean, modern UI.
+CosmicView is a space-themed full-stack web app built with Next.js that lets you explore NASA data with a clean, modern UI. It is deployed **end-to-end with a production-grade CI/CD pipeline** on AWS EKS.
 
-It includes a simple JWT-based auth flow, a dashboard that pulls **Astronomy Picture of the Day (APOD)** content, and a Mars weather view powered by NASA’s InSight API.
+It includes a simple JWT-based auth flow, a dashboard that pulls **Astronomy Picture of the Day (APOD)** content, and a Mars weather view powered by NASA's InSight API.
+
+> **⚠️ Note on Authentication Errors:** MongoDB Atlas automatically pauses free-tier clusters after a period of inactivity. If login or sign-up returns an error, the cluster is likely paused.
 
 ## Features
 
@@ -34,6 +36,57 @@ It includes a simple JWT-based auth flow, a dashboard that pulls **Astronomy Pic
 - JWT (`jsonwebtoken`)
 - Tailwind CSS
 
+---
+
+## CI/CD Pipeline
+
+This project includes a full end-to-end DevOps pipeline. The diagram below shows the complete architecture.
+
+![CI/CD Pipeline Diagram](./public/images/devops-project.svg)
+
+### Overview
+
+The pipeline automates code quality checks, container builds, vulnerability scanning, and deployment to AWS EKS — triggered automatically on every push to GitHub.
+
+```
+GitHub Push → Jenkins → SonarQube → Docker Build → Trivy Scan → Docker Hub → EKS Deploy
+```
+
+---
+
+### Pipeline Stages
+
+| Stage           | Tool                       | Description                                                                          |
+| --------------- | -------------------------- | ------------------------------------------------------------------------------------ |
+| Source          | GitHub                     | Jenkins polls/webhooks on push events and fetches the latest code                    |
+| Build           | Node.js (Docker container) | Runs `npm install` inside a Docker container volume-mounted to the Jenkins workspace |
+| Test            | Node.js                    | Runs the test suite                                                                  |
+| Code Quality    | SonarQube Scanner          | Static analysis and security scan; pipeline waits for the quality gate result        |
+| Filesystem Scan | Trivy                      | Scans the project filesystem for vulnerabilities before building the image           |
+| Docker Build    | Docker                     | Builds the application container image                                               |
+| Image Scan      | Trivy                      | Scans the newly built Docker image for vulnerabilities                               |
+| Push            | Docker Hub                 | Tags and pushes the image to Docker Hub (credentials stored securely in Jenkins)     |
+| Deploy          | AWS EKS                    | Pulls the image from Docker Hub and deploys to the EKS cluster                       |
+
+### Terraform / EKS Setup
+
+Terraform provisions the EKS cluster. Remote state is stored in an S3 bucket to support team collaboration and state locking.
+
+```bash
+# From the terraform/ directory
+terraform init    # initialise with S3 backend
+terraform plan
+terraform apply
+```
+
+After the cluster is live, configure `kubectl` to point at it:
+
+```bash
+aws eks update-kubeconfig --region <region> --name <cluster-name>
+```
+
+---
+
 ## Requirements
 
 - Node.js 18+ (recommended)
@@ -54,6 +107,8 @@ Notes:
 
 - Do **not** commit `.env` to GitHub.
 - On hosting platforms like Vercel, paste the **raw values** (no surrounding quotes).
+
+---
 
 ## Local Setup
 
@@ -108,19 +163,17 @@ npm run build
 npm run start
 ```
 
+---
+
 ## Troubleshooting
 
 ### MongoDB connection error
 
-If you see `MongooseServerSelectionError`, it’s usually one of:
+If you see `MongooseServerSelectionError`, it's usually one of:
 
-- Atlas Network Access doesn’t include your IP
+- Atlas Network Access doesn't include your IP
 - Wrong username/password in `MONGODB_URI`
 - Cluster is paused
-
-### Hydration mismatch warning in dev
-
-Some browser extensions (e.g., Grammarly) can inject attributes into the page before React hydrates, which can cause a dev-only hydration warning.
 
 ## Scripts
 
