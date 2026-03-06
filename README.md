@@ -18,7 +18,7 @@ It includes a simple JWT-based auth flow, a dashboard that pulls **Astronomy Pic
 
 ### Dashboard
 
-![Dashboard Screenshot 1](./public/screenshots/screenshot1.png)
+![Dashboard Screenshot 1](./public/screenshots/dashboard1.png)
 
 ### Mars Weather View
 
