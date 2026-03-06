@@ -17,7 +17,7 @@ export default function HomePage() {
   }, [router]);
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-black flex items-center justify-center">
+    <div className="fixed inset-0 z-20 flex items-center justify-center overflow-hidden">
       {/* Teleport content */}
       <motion.div
         initial={{ opacity: 0, scale: 0.95, filter: "blur(10px)" }}

@@ -41,7 +41,7 @@ export default async function Page() {
   const imageGallery = imageItems.slice(1);
 
   return (
-    <main className="min-h-screen bg-black text-white px-6 md:px-8 py-12">
+    <main className="min-h-screen text-white px-6 md:px-8 py-12">
       {/* DASHBOARD GRID */}
 
       {ApodImage ? (

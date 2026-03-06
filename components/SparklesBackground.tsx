@@ -5,7 +5,7 @@ import { SparklesCore } from "@/components/ui/sparkles";
 
 export default function SparklesBackground() {
   return (
-    <div className="pointer-events-none fixed inset-0 z-40">
+    <div className="pointer-events-none fixed inset-0 z-0">
       {/* Sparkles background */}
       <SparklesCore
         background="transparent"

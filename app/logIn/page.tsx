@@ -41,8 +41,8 @@ export default function LoginPage() {
 
   return (
     <main className="relative min-h-screen flex items-center justify-center text-white">
-      {/* BACKGROUND */}
-      <div className="absolute inset-0 bg-linear-to-br from-black via-[#050b18] to-black" />
+      {/* BACKGROUND — semi-transparent so sparkles show through */}
+      <div className="absolute inset-0 bg-linear-to-br from-black/40 via-[#050b18]/50 to-black/40" />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.06),transparent_60%)]" />
 
       {/* CARD */}
