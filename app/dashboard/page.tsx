@@ -45,35 +45,33 @@ export default async function Page() {
       {/* DASHBOARD GRID */}
 
       {ApodImage ? (
-        <div className="mx-auto max-w-7xl grid grid-cols-1 md:grid-cols-2 gap-10 items-start">
-          {/* LEFT SIDE — TEXT */}
-          <div className="space-y-6">
-            {/* Light heading */}
-            <p className="text-sm uppercase tracking-widest text-white/50">
-              Astronomy Picture of the Day
-            </p>
-
-            {/* Main title */}
-            <h1 className="text-3xl md:text-4xl font-bold leading-tight tracking-tight">
-              {ApodImage.title}
-            </h1>
-
-            {/* Date */}
-            <p className="text-sm text-white/60">{ApodImage.date}</p>
-            {/* Explanation */}
-            <p className="text-sm md:text-base leading-relaxed text-white/80">
-              {ApodImage.explanation}
-            </p>
-          </div>
-
-          {/* RIGHT SIDE — IMAGE */}
-          <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-black/40">
+        <div className="mx-auto max-w-7xl">
+          {/* IMAGE — floated right on md+, full-width block on mobile */}
+          <div className="mb-6 md:float-right md:ml-8 md:mb-4 md:w-1/2 rounded-2xl overflow-hidden border border-white/10 bg-black/40">
             <img
               src={ApodImage.url}
               alt={ApodImage.title}
-              className="w-full h-full object-cover"
+              className="w-full h-auto object-cover"
             />
           </div>
+
+          {/* TEXT — wraps around the floated image on desktop */}
+          <p className="text-sm uppercase tracking-widest text-white/50">
+            Astronomy Picture of the Day
+          </p>
+
+          <h1 className="mt-4 text-3xl md:text-4xl font-bold leading-tight tracking-tight">
+            {ApodImage.title}
+          </h1>
+
+          <p className="mt-4 text-sm text-white/60">{ApodImage.date}</p>
+
+          <p className="mt-4 text-sm md:text-base leading-relaxed text-white/80">
+            {ApodImage.explanation}
+          </p>
+
+          {/* Clear the float so subsequent sections aren't affected */}
+          <div className="clear-both" />
         </div>
       ) : (
         <div className="mx-auto max-w-7xl">
