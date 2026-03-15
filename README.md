@@ -5,6 +5,7 @@ CosmicView is a space-themed full-stack web app built with Next.js that lets you
 It includes a simple JWT-based auth flow, a dashboard that pulls **Astronomy Picture of the Day (APOD)** content, and a Mars weather view powered by NASA's InSight API.
 
 > **⚠️ Notes:**
+>
 > - **Authentication errors:** MongoDB Atlas automatically pauses free-tier clusters after a period of inactivity. If login or sign-up returns an error, the cluster is likely paused.
 > - **Pipeline status:** The EKS deployment stage and monitoring stage are currently in progress and will be added to the pipeline once they are complete.
 
@@ -44,7 +45,7 @@ It includes a simple JWT-based auth flow, a dashboard that pulls **Astronomy Pic
 
 This project includes a full end-to-end DevOps pipeline. The diagram below shows the complete architecture.
 
-![CI/CD Pipeline Diagram](./public/images/devops-project.svg)
+![CI/CD Pipeline Diagram](./public/images/cosmic-view-pipeline.svg)
 
 ### Overview
 
