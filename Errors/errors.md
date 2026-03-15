@@ -140,4 +140,46 @@ Docker stores an authentication token in `~/.docker/config.json`. This token is 
 - Never commit secrets to Git
 - Optionally run `docker logout` after completing push operations
 
----
+## 6. Kubernetes Production Best Practices: `resources`, `readinessProbe`, and `livenessProbe`
+
+In Kubernetes deployments, the `resources`, `readinessProbe`, and `livenessProbe` sections are optional but considered best practices for production environments.
+
+**`resources`**
+
+Allows you to define CPU and memory **requests** (minimum resources the container needs) and **limits** (maximum resources it can consume). This helps Kubernetes schedule pods efficiently and prevents one container from exhausting the node's resources.
+
+**`readinessProbe`**
+
+Checks whether the application inside the container is ready to receive traffic. Until it passes, Kubernetes will not route requests to that pod.
+
+**`livenessProbe`**
+
+Checks whether the container is still healthy and responsive. If it fails repeatedly, Kubernetes automatically restarts the container to recover from crashes or hangs.
+
+> Many tutorials (like TechWorld with Nana) omit these fields to keep examples simple, but in real production systems they are commonly included to improve **reliability**, **stability**, and **self-healing behavior**.
+
+**Example configuration:**
+
+```yaml
+resources:
+  requests:
+    cpu: "100m"
+    memory: "128Mi"
+  limits:
+    cpu: "500m"
+    memory: "512Mi"
+
+readinessProbe:
+  httpGet:
+    path: /
+    port: 3000
+  initialDelaySeconds: 10
+  periodSeconds: 10
+
+livenessProbe:
+  httpGet:
+    path: /
+    port: 3000
+  initialDelaySeconds: 30
+  periodSeconds: 20
+```

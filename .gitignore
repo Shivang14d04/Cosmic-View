@@ -39,3 +39,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# terraform
+.terraform/
+
+.terraform.lock.hcl
+
+# Ignore Kubernetes secret file containing sensitive information
+kubernetes/secret.yaml
