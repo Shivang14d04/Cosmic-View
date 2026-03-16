@@ -78,7 +78,7 @@ pipeline {
         stage("SonarQube Analysis") {
             steps {
                 withSonarQubeEnv('sonarserver') {
-                    withCredentials([string(credentialsId: 'Sonartoken', variable: 'SONAR_TOKEN')]) {
+                    withCredentials([string(credentialsId: 'sonartoken', variable: 'SONAR_TOKEN')]) {
                         script {
                             docker.image('sonarsource/sonar-scanner-cli').inside {
                                 sh '''
@@ -140,6 +140,24 @@ pipeline {
                       docker push ${IMAGE_NAME}:latest
                     """
                 }
+            }
+        }
+
+        stage("Deploy to Kubernetes") {
+            steps {
+                 
+                    sh """
+                      aws eks --region us-east-1 update-kubeconfig --name cosmic-view-eks-cluster
+
+                      kubectl apply -f kubernetes/namespace.yaml
+                      kubectl apply -f kubernetes/secret.yaml
+                      kubectl apply -f kubernetes/deployment.yaml
+                      kubectl apply -f kubernetes/service.yaml
+
+                      kubectl rollout status deployment/cosmic-view -n cosmic
+                    
+                    """
+                
             }
         }
     }

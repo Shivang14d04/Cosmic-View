@@ -1,8 +1,7 @@
 module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
-  version = "3.14.2"
-
-  name = "cosmic-view-vpc"
+  name    = "cosmic-view-vpc"
+  version = ">=5.0"
 
   cidr = "172.20.0.0/16"
   azs  = slice(data.aws_availability_zones.available.names, 0, 3)
