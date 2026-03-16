@@ -2,22 +2,32 @@
 FROM node:22-alpine AS deps
 WORKDIR /app
 
+# 🔧 upgrade alpine packages (fix CVEs like zlib)
 RUN apk update && apk upgrade
 
 COPY package.json package-lock.json ./
 RUN npm ci
 
+
 # Stage 2: Build the application
 FROM node:22-alpine AS builder
 WORKDIR /app
+
+RUN apk update && apk upgrade
+
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
+
 
 # Stage 3: Production image
 FROM node:22-alpine AS runner
 WORKDIR /app
+
+RUN apk update && apk upgrade
+
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
