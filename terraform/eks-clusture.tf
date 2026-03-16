@@ -13,7 +13,7 @@ module "eks" {
 
       policy_associations = {
         admin = {
-          policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSViewPolicy"
+          policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSAdminPolicy"
 
           access_scope = {
             namespace = "cosmic"
