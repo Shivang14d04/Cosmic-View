@@ -183,3 +183,90 @@ livenessProbe:
   initialDelaySeconds: 30
   periodSeconds: 20
 ```
+
+## CVE Error in Trivy Scan
+
+During the CI/CD pipeline, the Trivy image scan stage failed because it detected a CRITICAL vulnerability in the Docker image.
+
+The scan output reported:
+
+Library: zlib
+CVE: CVE-2026-22184
+Severity: CRITICAL
+Installed Version: 1.3.1-r2
+Fixed Version: 1.3.2-r0
+What is CVE?
+
+CVE (Common Vulnerabilities and Exposures) is a public database that tracks known security vulnerabilities in software. Each vulnerability is assigned a unique identifier such as CVE-2026-22184.
+
+Security scanners like Trivy check container images against this database to detect vulnerable packages.
+
+Why the error occurred
+
+The Docker image was built using the base image:
+
+node:22-alpine
+
+This Alpine Linux image contained an outdated version of the zlib library (1.3.1-r2) which has a known vulnerability that could allow arbitrary code execution through a buffer overflow.
+
+Since the pipeline used the following Trivy configuration:
+
+--severity CRITICAL
+--exit-code 1
+
+Trivy returned exit code 1 when a CRITICAL vulnerability was found, causing the Jenkins pipeline to fail.
+
+How the issue was fixed
+
+The vulnerability was resolved by upgrading system packages in the final Docker image using:
+
+RUN apk update && apk upgrade --no-cache
+
+This updates vulnerable packages (including zlib) to a secure version (1.3.2-r0), eliminating the CVE detected by Trivy.
+
+Key takeaway
+
+Security scanners like Trivy help enforce DevSecOps practices by preventing container images with critical vulnerabilities from being deployed. Updating base image packages or using newer base images is a common method to resolve such CVEs.
+
+## Jenkins Disk Space Issue
+
+Another issue occurred when the Jenkins EC2 instance ran out of disk space during pipeline execution.
+
+Cause
+
+The Jenkins instance stored large amounts of data from previous builds, including:
+
+Jenkins workspace directories
+
+Docker images and containers
+
+Trivy vulnerability database
+
+Build artifacts and logs
+
+Over time, these accumulated and filled the instance storage.
+
+Solution
+
+The issue was resolved by cleaning unused resources.
+
+Remove old workspaces:
+
+sudo rm -rf /var/lib/jenkins/workspace/\*
+
+Remove unused Docker images and containers:
+
+docker system prune -af
+
+Remove unused Docker volumes:
+
+docker volume prune -f
+
+After cleanup, disk usage dropped and the Jenkins pipeline could run successfully again.
+
+Best Practice
+
+To prevent this issue in the future, Jenkins pipelines should automatically clean workspaces and unused Docker resources after builds using steps such as:
+
+cleanWs()
+docker system prune -af
