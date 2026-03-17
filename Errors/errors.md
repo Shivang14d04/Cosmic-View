@@ -184,7 +184,7 @@ livenessProbe:
   periodSeconds: 20
 ```
 
-## CVE Error in Trivy Scan
+## 7 CVE Error in Trivy Scan
 
 During the CI/CD pipeline, the Trivy image scan stage failed because it detected a CRITICAL vulnerability in the Docker image.
 
@@ -228,7 +228,7 @@ Key takeaway
 
 Security scanners like Trivy help enforce DevSecOps practices by preventing container images with critical vulnerabilities from being deployed. Updating base image packages or using newer base images is a common method to resolve such CVEs.
 
-## Jenkins Disk Space Issue
+## 8 Jenkins Disk Space Issue
 
 Another issue occurred when the Jenkins EC2 instance ran out of disk space during pipeline execution.
 
@@ -270,3 +270,7 @@ To prevent this issue in the future, Jenkins pipelines should automatically clea
 
 cleanWs()
 docker system prune -af
+
+## 9 SonarQube Quality Gate Failure Due to Glob Pattern in Dockerfile
+
+The SonarQube quality gate failed because the Dockerfile used a glob pattern (package-lock.json\*) in the COPY command. Wildcard globbing can unintentionally copy extra files and make builds non-deterministic. The issue was resolved by explicitly copying the required files using COPY package.json package-lock.json ./, ensuring reproducible and predictable Docker builds in the CI/CD pipeline.

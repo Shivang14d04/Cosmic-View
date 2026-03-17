@@ -16,8 +16,8 @@ module "eks" {
           policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSAdminPolicy"
 
           access_scope = {
-            namespace = "cosmic"
-            type      = "cluster"
+            type      = "namespace"
+            namespaces = ["cosmic"]
           }
         }
       }
