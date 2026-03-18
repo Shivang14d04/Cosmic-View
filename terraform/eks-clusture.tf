@@ -5,23 +5,7 @@ module "eks" {
   name               = local.cluster_name
   kubernetes_version = "1.33"
 
-  authentication_mode = "API"
-
-  access_entries = {
-    jenkins = {
-      principal_arn = "arn:aws:iam::109714237020:role/jenkins-to-eks-role"
-
-      policy_associations = {
-        admin = {
-          policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSAdminPolicy"
-
-          access_scope = {
-            type       = "cluster"
-          }
-        }
-      }
-    }
-  }
+    enable_cluster_creator_admin_permissions = true
 
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnets
