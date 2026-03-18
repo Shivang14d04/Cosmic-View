@@ -7,7 +7,7 @@ It includes a simple JWT-based auth flow, a dashboard that pulls **Astronomy Pic
 > **⚠️ Notes:**
 >
 > - **Authentication errors:** MongoDB Atlas automatically pauses free-tier clusters after a period of inactivity. If login or sign-up returns an error, the cluster is likely paused.
-> - **Pipeline status:** The EKS deployment stage and monitoring stage are currently in progress and will be added to the pipeline once they are complete.
+> - **Pipeline status:** the monitoring dashboard is under progress.
 
 ## Features
 
@@ -70,6 +70,8 @@ GitHub Push → Jenkins → SonarQube → Docker Build → Trivy Scan → Docker
 | Image Scan      | Trivy                      | Scans the newly built Docker image for vulnerabilities                               |
 | Push            | Docker Hub                 | Tags and pushes the image to Docker Hub (credentials stored securely in Jenkins)     |
 | Deploy          | AWS EKS                    | Pulls the image from Docker Hub and deploys to the EKS cluster                       |
+
+![CI/CD Pipeline testing diagram](./public/images/pipelinepassed.png)
 
 ### Terraform / EKS Setup
 
