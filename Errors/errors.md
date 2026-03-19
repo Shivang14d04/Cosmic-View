@@ -184,93 +184,200 @@ livenessProbe:
   periodSeconds: 20
 ```
 
-## 7 CVE Error in Trivy Scan
+## 7. CVE Error in Trivy Scan (CRITICAL)
 
-During the CI/CD pipeline, the Trivy image scan stage failed because it detected a CRITICAL vulnerability in the Docker image.
+**Error:** The Trivy image scan stage failed because a CRITICAL CVE was detected.
 
-The scan output reported:
+**Scan output:**
 
+```
 Library: zlib
 CVE: CVE-2026-22184
 Severity: CRITICAL
 Installed Version: 1.3.1-r2
 Fixed Version: 1.3.2-r0
-What is CVE?
+```
 
-CVE (Common Vulnerabilities and Exposures) is a public database that tracks known security vulnerabilities in software. Each vulnerability is assigned a unique identifier such as CVE-2026-22184.
+**Why it happens:**
 
-Security scanners like Trivy check container images against this database to detect vulnerable packages.
+- The image was built from `node:22-alpine`.
+- The base image included a vulnerable `zlib` version.
+- Trivy was configured with `--severity CRITICAL --exit-code 1`, so any CRITICAL finding fails the build.
 
-Why the error occurred
+**Fix:**
 
-The Docker image was built using the base image:
+- Upgrade packages in the final image:
 
-node:22-alpine
-
-This Alpine Linux image contained an outdated version of the zlib library (1.3.1-r2) which has a known vulnerability that could allow arbitrary code execution through a buffer overflow.
-
-Since the pipeline used the following Trivy configuration:
-
---severity CRITICAL
---exit-code 1
-
-Trivy returned exit code 1 when a CRITICAL vulnerability was found, causing the Jenkins pipeline to fail.
-
-How the issue was fixed
-
-The vulnerability was resolved by upgrading system packages in the final Docker image using:
-
+```dockerfile
 RUN apk update && apk upgrade --no-cache
+```
 
-This updates vulnerable packages (including zlib) to a secure version (1.3.2-r0), eliminating the CVE detected by Trivy.
+- Alternatively, use a newer base image that already contains the fixed package.
 
-Key takeaway
+**Key takeaway:** Trivy failures often come from base image packages, not application code. Keep base images and OS packages current.
 
-Security scanners like Trivy help enforce DevSecOps practices by preventing container images with critical vulnerabilities from being deployed. Updating base image packages or using newer base images is a common method to resolve such CVEs.
+---
 
-## 8 Jenkins Disk Space Issue
+## 8. Jenkins Disk Space Exhausted
 
-Another issue occurred when the Jenkins EC2 instance ran out of disk space during pipeline execution.
+**Error:** Jenkins ran out of disk space during pipeline execution.
 
-Cause
+**Why it happens:** Build artifacts, old workspaces, Docker images/containers, and the Trivy database accumulate over time on the EC2 instance.
 
-The Jenkins instance stored large amounts of data from previous builds, including:
+**Fix:**
 
-Jenkins workspace directories
+- Remove old workspaces:
 
-Docker images and containers
+```bash
+sudo rm -rf /var/lib/jenkins/workspace/*
+```
 
-Trivy vulnerability database
+- Remove unused Docker resources:
 
-Build artifacts and logs
-
-Over time, these accumulated and filled the instance storage.
-
-Solution
-
-The issue was resolved by cleaning unused resources.
-
-Remove old workspaces:
-
-sudo rm -rf /var/lib/jenkins/workspace/\*
-
-Remove unused Docker images and containers:
-
+```bash
 docker system prune -af
-
-Remove unused Docker volumes:
-
 docker volume prune -f
+```
 
-After cleanup, disk usage dropped and the Jenkins pipeline could run successfully again.
+**Prevention:**
 
-Best Practice
+- Add cleanup steps after builds:
 
-To prevent this issue in the future, Jenkins pipelines should automatically clean workspaces and unused Docker resources after builds using steps such as:
-
+```groovy
 cleanWs()
-docker system prune -af
+sh 'docker system prune -af'
+```
 
-## 9 SonarQube Quality Gate Failure Due to Glob Pattern in Dockerfile
+---
 
-The SonarQube quality gate failed because the Dockerfile used a glob pattern (package-lock.json\*) in the COPY command. Wildcard globbing can unintentionally copy extra files and make builds non-deterministic. The issue was resolved by explicitly copying the required files using COPY package.json package-lock.json ./, ensuring reproducible and predictable Docker builds in the CI/CD pipeline.
+## 9. SonarQube Quality Gate Failure: Dockerfile Glob
+
+**Error:** Quality gate failed due to a glob pattern in a `COPY` instruction.
+
+**Why it happens:** Using `package-lock.json*` can match unintended files and make builds non-deterministic, which SonarQube flags.
+
+**Fix:**
+
+- Copy files explicitly:
+
+```dockerfile
+COPY package.json package-lock.json ./
+```
+
+---
+
+## 10. Terraform Destroy Fails (EKS / AWS)
+
+**Error:** `terraform destroy` fails with `DependencyViolation` and resources stuck in `destroying`.
+
+**Why it happens:** AWS blocks deletion when dependent resources still exist. With EKS, Kubernetes creates external AWS resources (load balancers, ENIs, EIPs) that Terraform does not track.
+
+**Dependency chain:**
+
+```
+Load Balancer / ENI / EC2
+            ↓
+          Subnet
+            ↓
+           VPC
+            ↓
+     Internet Gateway
+```
+
+**Fix (recommended order):**
+
+1. Clean Kubernetes resources first:
+
+```bash
+kubectl delete svc --all
+kubectl delete ingress --all
+```
+
+2. Ensure no load balancers remain:
+
+```bash
+aws elbv2 describe-load-balancers
+aws elb describe-load-balancers
+```
+
+3. Ensure no EC2 instances remain:
+
+```bash
+aws ec2 describe-instances \
+  --query 'Reservations[*].Instances[*].InstanceId'
+```
+
+4. Check for ENIs (wait or delete the owning load balancer):
+
+```bash
+aws ec2 describe-network-interfaces
+```
+
+5. Optional: check NAT gateways and EIPs:
+
+```bash
+aws ec2 describe-nat-gateways
+aws ec2 describe-addresses
+```
+
+6. Then run:
+
+```bash
+terraform destroy
+```
+
+**What not to do:**
+
+- Do not delete `amazon-elb` ENIs manually.
+- Do not run `terraform destroy` before cleaning Kubernetes resources.
+- Do not ignore `DependencyViolation` errors.
+
+**Golden rules:**
+
+- If an ENI is owned by `amazon-elb`, delete the load balancer first.
+- If you see `DependencyViolation`, something still exists.
+- Always clean Kubernetes resources before destroying EKS infra.
+
+⚡ Fast Debug Flow (REAL-WORLD)
+
+When destroy fails:
+
+1. Check EC2 → terminate
+2. Check Load Balancer (v2 + v1) → delete
+3. Check ENI → wait / trace owner
+4. Retry destroy
+   🧠 Analogy
+
+VPC = Building
+
+EC2 = People
+
+ENI = Furniture
+
+Load Balancer = Equipment
+
+👉 You can't destroy the building if anything is inside
+
+🚀 Pro Tips (ADVANCED)
+✅ Use annotations to control LB type
+
+Avoid Classic ELB:
+
+service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+✅ Use Terraform + Kubernetes together
+
+Manage K8s resources via Terraform OR Helm
+
+✅ Add cleanup script (recommended)
+kubectl delete svc --all
+kubectl delete ingress --all
+terraform destroy
+🏁 Final Takeaway
+
+👉 Terraform destroy works smoothly ONLY when:
+
+No hidden AWS resources exist
+
+Kubernetes resources are cleaned
+
+AWS async cleanup is complete
