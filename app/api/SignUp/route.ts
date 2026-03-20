@@ -11,7 +11,7 @@ export async function POST(request: Request) {
     if (!jwtSecret) {
       return NextResponse.json(
         { success: false, message: "Server misconfigured" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -23,7 +23,7 @@ export async function POST(request: Request) {
           success: false,
           message: "Username, email and password are required",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -34,7 +34,7 @@ export async function POST(request: Request) {
           success: false,
           message: "Password must be at least 6 characters",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -49,7 +49,7 @@ export async function POST(request: Request) {
         },
         {
           status: 409,
-        }
+        },
       );
     }
 
@@ -70,7 +70,7 @@ export async function POST(request: Request) {
       jwtSecret,
       {
         expiresIn: "7d",
-      }
+      },
     );
 
     const response = NextResponse.json(
@@ -85,15 +85,15 @@ export async function POST(request: Request) {
       },
       {
         status: 201,
-      }
+      },
     );
 
     response.cookies.set({
       name: "token",
       value: token,
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+      secure: false,
+      sameSite: "lax",
       path: "/",
       maxAge: 60 * 60 * 24 * 7,
     });
@@ -108,7 +108,7 @@ export async function POST(request: Request) {
       },
       {
         status: 500,
-      }
+      },
     );
   }
 }

@@ -10,8 +10,8 @@ export async function GET() {
     name: "token",
     value: "",
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "strict",
+    secure: false,
+    sameSite: "lax",
     path: "/",
     maxAge: 0,
   });

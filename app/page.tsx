@@ -11,14 +11,13 @@ export default function HomePage() {
   useEffect(() => {
     const timer = setTimeout(() => {
       router.push("/dashboard");
-    }, 5000); // teleport after 5s
+    }, 3000); // teleport after 3s
 
     return () => clearTimeout(timer);
   }, [router]);
 
   return (
     <div className="fixed inset-0 z-20 flex items-center justify-center overflow-hidden">
-      {/* Teleport content */}
       <motion.div
         initial={{ opacity: 0, scale: 0.95, filter: "blur(10px)" }}
         animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}

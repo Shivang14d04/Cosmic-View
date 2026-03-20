@@ -30,10 +30,9 @@ export default function LoginPage() {
         return;
       }
 
-      router.refresh();
       setTimeout(() => {
         router.push("/dashboard");
-      }, 1500);
+      }, 1100);
     } catch {
       setLoading(false);
     }

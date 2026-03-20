@@ -37,7 +37,6 @@ export default function Navbar() {
 
   async function logout() {
     await fetch("/api/logOut", { method: "GET" });
-    router.refresh();
     router.push("/");
   }
 
@@ -79,7 +78,7 @@ export default function Navbar() {
                   "text-sm transition",
                   isActive
                     ? "text-white font-semibold"
-                    : "text-white/60 hover:text-white"
+                    : "text-white/60 hover:text-white",
                 )}
               >
                 {item.label}

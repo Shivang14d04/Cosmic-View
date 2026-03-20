@@ -1,0 +1,75 @@
+{
+    "SecurityGroups": [
+        {
+            "GroupId": "sg-07ea435b2a6dc27af",
+            "IpPermissionsEgress": [
+                {
+                    "IpProtocol": "-1",
+                    "UserIdGroupPairs": [],
+                    "IpRanges": [
+                        {
+                            "CidrIp": "0.0.0.0/0"
+                        }
+                    ],
+                    "Ipv6Ranges": [],
+                    "PrefixListIds": []
+                }
+            ],
+            "Tags": [
+                {
+                    "Key": "kubernetes.io/cluster/cosmic-view-eks-cluster",
+                    "Value": "owned"
+                }
+            ],
+            "VpcId": "vpc-0d1efa4f527d4d1cd",
+            "SecurityGroupArn": "arn:aws:ec2:us-east-1:109714237020:security-group/sg-07ea435b2a6dc27af",
+            "OwnerId": "109714237020",
+            "GroupName": "k8s-elb-af986283a4fc9477f8e9035ac9b33906",
+            "Description": "Security group for Kubernetes ELB af986283a4fc9477f8e9035ac9b33906 (cosmic/cosmic-view-service)",
+            "IpPermissions": [
+                {
+                    "IpProtocol": "tcp",
+                    "FromPort": 80,
+                    "ToPort": 80,
+                    "UserIdGroupPairs": [],
+                    "IpRanges": [
+                        {
+                            "CidrIp": "0.0.0.0/0"
+                        }
+                    ],
+                    "Ipv6Ranges": [],
+                    "PrefixListIds": []
+                },
+                {
+                    "IpProtocol": "icmp",
+                    "FromPort": 3,
+                    "ToPort": 4,
+                    "UserIdGroupPairs": [],
+                    "IpRanges": [
+                        {
+                            "CidrIp": "0.0.0.0/0"
+                        }
+                    ],
+                    "Ipv6Ranges": [],
+                    "PrefixListIds": []
+                }
+            ]
+        },
+        {
+            "GroupId": "sg-015b66bf06210ff2c",
+            "IpPermissionsEgress": [],
+            "Tags": [
+                {
+                    "Key": "Name",
+                    "Value": "cosmic-view-vpc-default"
+                }
+            ],
+            "VpcId": "vpc-0d1efa4f527d4d1cd",
+            "SecurityGroupArn": "arn:aws:ec2:us-east-1:109714237020:security-group/sg-015b66bf06210ff2c",
+            "OwnerId": "109714237020",
+            "GroupName": "default",
+            "Description": "default VPC security group",
+            "IpPermissions": []
+        }
+    ]
+}
