@@ -266,118 +266,551 @@ COPY package.json package-lock.json ./
 
 ---
 
-## 10. Terraform Destroy Fails (EKS / AWS)
+# Terraform Destroy Failures on EKS — Root Cause & Resolution Guide
 
-**Error:** `terraform destroy` fails with `DependencyViolation` and resources stuck in `destroying`.
+> **TL;DR** — Kubernetes dynamically creates AWS resources (Load Balancers, ENIs, Elastic IPs) that Terraform never tracked. AWS blocks deletion of anything that still has live dependencies. Clean Kubernetes resources first, then run `terraform destroy`.
 
-**Why it happens:** AWS blocks deletion when dependent resources still exist. With EKS, Kubernetes creates external AWS resources (load balancers, ENIs, EIPs) that Terraform does not track.
+---
 
-**Dependency chain:**
+## Table of Contents
+
+1. [Why This Happens](#1-why-this-happens)
+2. [The Dependency Chain](#2-the-dependency-chain)
+3. [Common Hidden Blockers](#3-common-hidden-blockers)
+4. [Resolution — Step-by-Step](#4-resolution--step-by-step)
+   - [Step 1 — Clean Kubernetes Resources](#step-1--clean-kubernetes-resources)
+   - [Step 2 — Verify Load Balancers](#step-2--verify-load-balancers)
+   - [Step 3 — Verify EC2 Instances](#step-3--verify-ec2-instances)
+   - [Step 4 — Check ENIs](#step-4--check-enis)
+   - [Step 5 — Check NAT Gateways & Elastic IPs](#step-5--check-nat-gateways--elastic-ips)
+   - [Step 6 — Run Terraform Destroy](#step-6--run-terraform-destroy)
+5. [Fast Debug Checklist](#5-fast-debug-checklist)
+6. [Special Case — VPC Stuck in `deleting`](#6-special-case--vpc-stuck-in-deleting)
+7. [What NOT To Do](#7-what-not-to-do)
+8. [Golden Rules](#8-golden-rules)
+9. [Prevention & Best Practices](#9-prevention--best-practices)
+
+---
+
+## 1. Why This Happens
+
+Terraform tracks only the resources it creates. In an EKS cluster, Kubernetes itself provisions AWS resources at runtime in response to Kubernetes objects — these resources exist entirely outside Terraform's state.
 
 ```
-Load Balancer / ENI / EC2
-            ↓
-          Subnet
-            ↓
-           VPC
-            ↓
-     Internet Gateway
+┌──────────────────────────────────────────────────────┐
+│  kubectl apply -f service.yaml  (type: LoadBalancer)  │
+│         │                                              │
+│         ▼                                              │
+│  Kubernetes Controller → AWS API                       │
+│         │                                              │
+│         ▼                                              │
+│  ELB / NLB created ──► Terraform has NO record of it  │
+└──────────────────────────────────────────────────────┘
 ```
 
-**Fix (recommended order):**
+When `terraform destroy` runs:
 
-1. Clean Kubernetes resources first:
+1. Terraform attempts to delete the VPC, subnets, and internet gateway.
+2. AWS finds the ELB/ENI/EIP still attached to these resources.
+3. AWS returns `DependencyViolation` and blocks the deletion.
+4. Terraform exits with an error, leaving the infrastructure half-destroyed.
+
+---
+
+## 2. The Dependency Chain
+
+AWS enforces a strict bottom-up deletion order. Anything at a higher layer must be gone before the layer below can be deleted.
+
+```
+┌─────────────────────────────────────────────┐
+│  Layer 4 — Compute & Services               │
+│  EC2 Instances / Load Balancers (ELB/ALB/   │
+│  NLB) / NAT Gateways / Elastic IPs / ENIs   │
+└────────────────────┬────────────────────────┘
+                     │ must be deleted first
+                     ▼
+┌─────────────────────────────────────────────┐
+│  Layer 3 — Subnets                          │
+│  Public & Private Subnets                   │
+└────────────────────┬────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────────┐
+│  Layer 2 — VPC                              │
+└────────────────────┬────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────────┐
+│  Layer 1 — Internet Gateway                 │
+└─────────────────────────────────────────────┘
+```
+
+If **anything** in Layer 4 exists, **everything** below it will fail to delete.
+
+---
+
+## 3. Common Hidden Blockers
+
+| Resource                       | Created By                               | Why It Blocks                |
+| ------------------------------ | ---------------------------------------- | ---------------------------- |
+| Classic Load Balancer (ELBv1)  | `Service type=LoadBalancer`              | Attached to subnets          |
+| ALB / NLB (ELBv2)              | `Ingress` or `Service type=LoadBalancer` | Attached to subnets          |
+| ENI (`amazon-elb` description) | AWS automatically for ELBs               | Attached to subnets          |
+| ENI (`aws-k8s-*` description)  | AWS VPC CNI for pods                     | Attached to subnets          |
+| NAT Gateway                    | Kubernetes egress traffic                | Requires subnet, EIP         |
+| Elastic IP                     | Attached to NAT Gateway                  | Blocks NAT GW deletion       |
+| EC2 Instances (worker nodes)   | Managed Node Group                       | Attached to subnets          |
+| Security Group rules           | EKS controller                           | References block SG deletion |
+
+> **Key insight:** ENIs with description `amazon-elb` cannot be deleted directly. You must delete the owning Load Balancer first — AWS will release the ENI automatically.
+
+---
+
+## 4. Resolution — Step-by-Step
+
+> ⚠️ **Always perform steps 1–5 before running `terraform destroy`.** Running destroy first and then trying to clean up is significantly harder.
+
+### Step 1 — Clean Kubernetes Resources
+
+Delete all services and ingresses that may have provisioned AWS Load Balancers. Do this while the cluster is still reachable.
 
 ```bash
-kubectl delete svc --all
-kubectl delete ingress --all
+# Delete all services across all namespaces
+kubectl delete svc --all -A
+
+# Delete all ingresses across all namespaces
+kubectl delete ingress --all -A
+
+# Wait ~60 seconds for the AWS Load Balancer Controller
+# or in-tree cloud provider to deprovision the ELBs
+sleep 60
 ```
 
-2. Ensure no load balancers remain:
+> If the cluster is already unreachable, skip to Step 2 and clean up manually via AWS CLI.
+
+---
+
+### Step 2 — Verify Load Balancers
+
+Check for both ELBv1 (Classic) and ELBv2 (ALB/NLB). Both can block VPC deletion.
 
 ```bash
-aws elbv2 describe-load-balancers
-aws elb describe-load-balancers
+# List ELBv2 (ALB / NLB)
+aws elbv2 describe-load-balancers \
+  --query 'LoadBalancers[*].{Name:LoadBalancerName,ARN:LoadBalancerArn,Type:Type,State:State.Code}' \
+  --output table
+
+# List ELBv1 (Classic)
+aws elb describe-load-balancers \
+  --query 'LoadBalancerDescriptions[*].{Name:LoadBalancerName,DNS:DNSName}' \
+  --output table
 ```
 
-3. Ensure no EC2 instances remain:
+**If any remain, delete them:**
 
 ```bash
+# Delete ELBv2 by ARN
+aws elbv2 delete-load-balancer \
+  --load-balancer-arn <arn>
+
+# Delete ELBv1 by name
+aws elb delete-load-balancer \
+  --load-balancer-name <name>
+```
+
+---
+
+### Step 3 — Verify EC2 Instances
+
+EKS worker nodes in a managed node group are typically removed when Terraform destroys the node group, but it's worth confirming.
+
+```bash
+# List running instances with their tags
 aws ec2 describe-instances \
-  --query 'Reservations[*].Instances[*].InstanceId'
+  --filters "Name=instance-state-name,Values=running,pending,stopping" \
+  --query 'Reservations[*].Instances[*].{ID:InstanceId,State:State.Name,Type:InstanceType,Name:Tags[?Key==`Name`].Value|[0]}' \
+  --output table
 ```
 
-4. Check for ENIs (wait or delete the owning load balancer):
+**If EKS worker nodes still appear, terminate them:**
 
 ```bash
-aws ec2 describe-network-interfaces
+aws ec2 terminate-instances --instance-ids <id1> <id2>
+
+# Wait for termination
+aws ec2 wait instance-terminated --instance-ids <id1> <id2>
 ```
 
-5. Optional: check NAT gateways and EIPs:
+---
+
+### Step 4 — Check ENIs
+
+ENIs are the most common silent blocker. They persist even after a Load Balancer appears deleted, due to AWS async cleanup.
 
 ```bash
-aws ec2 describe-nat-gateways
-aws ec2 describe-addresses
+# List all non-terminated ENIs, grouped by description
+aws ec2 describe-network-interfaces \
+  --query 'NetworkInterfaces[*].{ID:NetworkInterfaceId,Status:Status,Description:Description,Owner:Attachment.InstanceOwnerId}' \
+  --output table
 ```
 
-6. Then run:
+**Interpret the results:**
+
+| ENI Description                        | Status      | Action                                                       |
+| -------------------------------------- | ----------- | ------------------------------------------------------------ |
+| `amazon-elb`                           | any         | Delete the owning Load Balancer — ENI releases automatically |
+| `aws-k8s-*` or `interface for fargate` | `in-use`    | Find and delete the owning resource                          |
+| _(blank or custom)_                    | `available` | Safe to delete manually (see below)                          |
+| any                                    | `in-use`    | Find the attachment owner before deleting                    |
 
 ```bash
+# Detach an ENI that is in 'available' status and delete it
+aws ec2 delete-network-interface \
+  --network-interface-id <eni-id>
+```
+
+> ❌ **Never force-delete an `amazon-elb` ENI directly.** It will fail and is unnecessary — deleting the Load Balancer releases it automatically.
+
+---
+
+### Step 5 — Check NAT Gateways & Elastic IPs
+
+```bash
+# List NAT Gateways (filter out already-deleted ones)
+aws ec2 describe-nat-gateways \
+  --filter "Name=state,Values=available,pending,deleting" \
+  --query 'NatGateways[*].{ID:NatGatewayId,State:State,SubnetId:SubnetId}' \
+  --output table
+
+# List Elastic IPs
+aws ec2 describe-addresses \
+  --query 'Addresses[*].{AllocationId:AllocationId,IP:PublicIp,AssociationId:AssociationId}' \
+  --output table
+```
+
+**Delete NAT Gateways first, then release EIPs:**
+
+```bash
+# Delete NAT Gateway (async — takes 1–2 min to fully delete)
+aws ec2 delete-nat-gateway --nat-gateway-id <id>
+
+# Wait before releasing the EIP — the NAT GW must be deleted first
+aws ec2 wait nat-gateway-deleted --nat-gateway-ids <id>
+
+# Release the Elastic IP
+aws ec2 release-address --allocation-id <allocation-id>
+```
+
+---
+
+### Step 6 — Run Terraform Destroy
+
+After completing steps 1–5:
+
+```bash
+cd <your-terraform-directory>
+
 terraform destroy
 ```
 
-**What not to do:**
+If it still fails, re-run the AWS CLI checks above — something was missed. Terraform error messages will typically reference a specific resource ID, making it easier to trace back to the blocker.
 
-- Do not delete `amazon-elb` ENIs manually.
-- Do not run `terraform destroy` before cleaning Kubernetes resources.
-- Do not ignore `DependencyViolation` errors.
+---
 
-**Golden rules:**
+## 5. Fast Debug Checklist
 
-- If an ENI is owned by `amazon-elb`, delete the load balancer first.
-- If you see `DependencyViolation`, something still exists.
-- Always clean Kubernetes resources before destroying EKS infra.
+When `terraform destroy` fails with `DependencyViolation`, run through this in order:
 
-⚡ Fast Debug Flow (REAL-WORLD)
+```
+[ ] 1. kubectl delete svc --all -A && kubectl delete ingress --all -A
+[ ] 2. aws elbv2 describe-load-balancers    → delete if any found
+[ ] 3. aws elb describe-load-balancers      → delete if any found
+[ ] 4. aws ec2 describe-instances           → terminate if running
+[ ] 5. aws ec2 describe-network-interfaces  → trace owner or delete if 'available'
+[ ] 6. aws ec2 describe-nat-gateways        → delete if found
+[ ] 7. aws ec2 describe-addresses           → release unassociated EIPs
+[ ] 8. terraform destroy
+```
 
-When destroy fails:
+---
 
-1. Check EC2 → terminate
-2. Check Load Balancer (v2 + v1) → delete
-3. Check ENI → wait / trace owner
-4. Retry destroy
-   🧠 Analogy
+## 6. Special Case — VPC Stuck in `deleting`
 
-VPC = Building
+Sometimes subnets and the internet gateway delete successfully but the VPC itself gets stuck. This is almost always caused by ENIs that haven't been released yet by AWS (async cleanup lag).
 
-EC2 = People
+**Verify:**
 
-ENI = Furniture
+```bash
+# Replace <vpc-id> with your actual VPC ID
+aws ec2 describe-network-interfaces \
+  --filters "Name=vpc-id,Values=<vpc-id>" \
+  --query 'NetworkInterfaces[*].{ID:NetworkInterfaceId,Status:Status,Description:Description}' \
+  --output table
+```
 
-Load Balancer = Equipment
+**Resolution:**
 
-👉 You can't destroy the building if anything is inside
+- If ENIs are still listed → wait 1–3 minutes and check again. AWS is cleaning them up asynchronously.
+- If ENIs are gone but VPC is still stuck → wait an additional 2–5 minutes. AWS VPC deletion propagation can lag.
+- Run `terraform destroy` again once the VPC is gone from `aws ec2 describe-vpcs`.
 
-🚀 Pro Tips (ADVANCED)
-✅ Use annotations to control LB type
+> Do **not** attempt to force-delete a VPC via the console or CLI while Terraform considers it in-state — this will cause a state drift that requires manual `terraform state rm` to fix.
 
-Avoid Classic ELB:
+---
 
-service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
-✅ Use Terraform + Kubernetes together
+## 7. What NOT To Do
 
-Manage K8s resources via Terraform OR Helm
+| ❌ Don't                                           | Why                                                           |
+| -------------------------------------------------- | ------------------------------------------------------------- |
+| Run `terraform destroy` before cleaning Kubernetes | AWS will immediately return `DependencyViolation`             |
+| Manually delete `amazon-elb` ENIs                  | AWS won't allow it — delete the owning Load Balancer instead  |
+| Ignore `DependencyViolation` errors                | Something still exists; retrying without fixing it won't help |
+| Force-delete a VPC while Terraform tracks it       | Creates state drift requiring manual cleanup                  |
+| Delete Security Groups before their dependent SGs  | SGs that reference each other must be cleaned in order        |
 
-✅ Add cleanup script (recommended)
-kubectl delete svc --all
-kubectl delete ingress --all
-terraform destroy
-🏁 Final Takeaway
+---
 
-👉 Terraform destroy works smoothly ONLY when:
+## 8. Golden Rules
 
-No hidden AWS resources exist
+```
+1. Kubernetes creates AWS resources → Terraform doesn't know about them
+2. AWS blocks deletion if ANY dependency exists
+3. Always clean Kubernetes BEFORE running terraform destroy
+4. amazon-elb ENI = delete the Load Balancer, NOT the ENI
+5. DependencyViolation = something still exists — find it
+6. VPC stuck = async cleanup lag — wait and retry
+```
 
-Kubernetes resources are cleaned
+---
 
-AWS async cleanup is complete
+## 9. Prevention & Best Practices
+
+### Use NLB Instead of Classic ELB
+
+Classic Load Balancers (ELBv1) are harder to manage and slower to clean up. Annotate your services to use NLB:
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+spec:
+  type: LoadBalancer
+```
+
+### Add a Pre-Destroy Cleanup Script
+
+Check this into your repo alongside your Terraform code:
+
+```bash
+#!/bin/bash
+# scripts/pre-destroy.sh
+# Run this before terraform destroy in EKS environments
+
+set -e
+
+REGION="${AWS_REGION:-us-east-1}"
+
+echo "==> Deleting Kubernetes services and ingresses..."
+kubectl delete svc --all -A --ignore-not-found
+kubectl delete ingress --all -A --ignore-not-found
+
+echo "==> Waiting 60s for AWS to deprovision load balancers..."
+sleep 60
+
+echo "==> Checking for remaining ELBv2 load balancers..."
+aws elbv2 describe-load-balancers \
+  --query 'LoadBalancers[*].LoadBalancerArn' \
+  --output text --region "$REGION" | \
+  tr '\t' '\n' | \
+  xargs -I{} aws elbv2 delete-load-balancer --load-balancer-arn {} --region "$REGION" || true
+
+echo "==> Checking for remaining ELBv1 load balancers..."
+aws elb describe-load-balancers \
+  --query 'LoadBalancerDescriptions[*].LoadBalancerName' \
+  --output text --region "$REGION" | \
+  tr '\t' '\n' | \
+  xargs -I{} aws elb delete-load-balancer --load-balancer-name {} --region "$REGION" || true
+
+echo "==> Pre-destroy cleanup complete. Ready to run terraform destroy."
+```
+
+### Keep Infrastructure and Kubernetes in Sync
+
+Consider managing Kubernetes resources alongside Terraform using one of these approaches:
+
+- **Terraform Kubernetes provider** — declare `kubernetes_service` resources in Terraform so it knows about them and can destroy them in the right order.
+- **Helm + Terraform helm_release** — use the `helm_release` resource to manage application deployments; Terraform will destroy the Helm release (and its Load Balancers) before touching the VPC.
+- **ArgoCD / GitOps** — manage app lifecycle separately; include a pre-destroy hook that cleans Kubernetes resources before infra teardown.
+
+---
+
+_Last updated: 2026 | Applies to: terraform-aws-modules/eks ≥ v20, Kubernetes ≥ 1.27, AWS provider ≥ v5_
+
+## 11.
+
+# 🍪 Cookies in Next.js (Localhost vs Vercel vs EKS)
+
+## 🧠 Core Concept
+
+Cookies behave differently depending on:
+
+- **HTTP vs HTTPS**
+- **Same-origin vs Cross-origin**
+- Browser security rules
+
+---
+
+# 🔑 Key Cookie Options
+
+### 1. `secure`
+
+- `true` → Cookie ONLY works on **HTTPS**
+- `false` → Works on **HTTP + HTTPS**
+
+---
+
+### 2. `sameSite`
+
+- `"strict"` → Only same-site requests (very restrictive)
+- `"lax"` → Same-site + normal navigation (recommended for HTTP)
+- `"none"` → Allows cross-site (requires HTTPS + secure=true)
+
+---
+
+# 🌍 Environment Comparison
+
+## ✅ Localhost
+
+- URL: `http://localhost`
+- Browser treats as **trusted**
+- Same-origin always
+
+✔ Works with:
+
+```js
+secure: false,
+sameSite: "strict"
+```
+
+---
+
+## ✅ Vercel
+
+- URL: `https://your-app.vercel.app`
+- HTTPS + same domain
+
+✔ Works with:
+
+```js
+secure: true,
+sameSite: "strict"
+```
+
+---
+
+## ❌ EKS (without HTTPS)
+
+- URL: `http://<load-balancer>.elb.amazonaws.com`
+- HTTP + stricter browser rules
+
+🚫 This fails:
+
+```js
+secure: true,        // ❌ requires HTTPS
+sameSite: "strict",  // ❌ too restrictive
+```
+
+---
+
+# ✅ Correct Config for EKS (HTTP)
+
+```js
+secure: false,
+sameSite: "lax"
+```
+
+✔ Allows:
+
+- Cookie storage on HTTP
+- Normal navigation
+- API calls from frontend
+
+---
+
+# 🔥 Why `secure: true` fails on HTTP
+
+Browser rule:
+
+> ❗ “Secure cookies can ONLY be stored over HTTPS”
+
+So:
+
+- HTTP + `secure: true` → ❌ cookie rejected
+
+---
+
+# 🔥 Why `sameSite: "strict"` fails
+
+Browser rule:
+
+> ❗ “Only send cookie if request is strictly same-site”
+
+In EKS:
+
+- Redirects / API calls may be treated as cross-site
+- Cookie gets blocked
+
+---
+
+# 🚀 Production Config (HTTPS)
+
+When you add domain + HTTPS:
+
+```js
+secure: true,
+sameSite: "none"
+```
+
+✔ Required for:
+
+- Cross-origin setups
+- Subdomains
+- Real production apps
+
+---
+
+# 🎯 Golden Rules
+
+### 👉 HTTP (EKS without HTTPS)
+
+```js
+secure: false;
+sameSite: "lax";
+```
+
+### 👉 HTTPS (Production)
+
+```js
+secure: true;
+sameSite: "none";
+```
+
+---
+
+# 🧠 One-line Summary
+
+> Cookies fail in EKS because `secure=true` needs HTTPS and `sameSite=strict` is too restrictive.
+
+---
+
+# 🚀 Dev Insight
+
+This is a **real-world production issue**:
+
+- Common in DevOps setups
+- Happens in Kubernetes deployments
+- Frequently asked in interviews
+
+---

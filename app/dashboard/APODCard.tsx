@@ -32,7 +32,9 @@ export default function APODCard({ apod }: { apod: APOD }) {
         </div>
 
         <div className="p-4">
-          <h3 className="text-sm font-semibold leading-snug">{apod.title}</h3>
+          <h3 className="text-sm font-semibold leading-snug line-clamp-1">
+            {apod.title}
+          </h3>{" "}
           <p className="mt-1 text-xs text-white/60">{apod.date}</p>
           <p className="mt-2 text-xs text-white/40 group-hover:text-white/60 transition-colors">
             Click to explore →
