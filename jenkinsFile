@@ -35,8 +35,8 @@ pipeline {
                   docker run --rm \
                   -v ${WORKSPACE}:/project \
                   ${TRIVY_IMAGE} fs \
-                  --severity HIGH,CRITICAL \
-                  --exit-code 0 \
+                  --severity CRITICAL \
+                  --exit-code 1 \
                   --skip-dirs node_modules \
                   /project
                 """
