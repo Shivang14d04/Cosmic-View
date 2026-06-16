@@ -49,10 +49,10 @@ This project includes a full end-to-end DevOps pipeline. The diagram below shows
 
 ### Overview
 
-The pipeline automates code quality checks, container builds, vulnerability scanning, and deployment to AWS EKS — triggered automatically on every push to GitHub.
+The pipeline automates code quality checks, container builds, vulnerability scanning, and deployment to AWS EKS — triggered automatically on every push to GitHub via a configured GitHub Webhook.
 
 ```
-GitHub Push → Jenkins → SonarQube → Docker Build → Trivy Scan → Docker Hub → EKS Deploy
+GitHub Push (via Webhook) → Jenkins → SonarQube → Docker Build → Trivy Scan → Docker Hub → EKS Deploy
 ```
 
 ---
@@ -61,7 +61,7 @@ GitHub Push → Jenkins → SonarQube → Docker Build → Trivy Scan → Docker
 
 | Stage           | Tool                       | Description                                                                          |
 | --------------- | -------------------------- | ------------------------------------------------------------------------------------ |
-| Source          | GitHub                     | Jenkins polls/webhooks on push events and fetches the latest code                    |
+| Source          | GitHub                     | GitHub Webhook triggers Jenkins automatically on push events to fetch the latest code |
 | Build           | Node.js (Docker container) | Runs `npm install` inside a Docker container volume-mounted to the Jenkins workspace |
 | Test            | Node.js                    | Runs the test suite                                                                  |
 | Code Quality    | SonarQube Scanner          | Static analysis and security scan; pipeline waits for the quality gate result        |
