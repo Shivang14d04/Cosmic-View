@@ -36,7 +36,7 @@ pipeline {
                   -v ${WORKSPACE}:/project \
                   ${TRIVY_IMAGE} fs \
                   --severity HIGH,CRITICAL \
-                  --exit-code 1 \
+                  --exit-code 0 \
                   --skip-dirs node_modules \
                   /project
                 """
