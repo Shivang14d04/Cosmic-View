@@ -196,4 +196,4 @@ If you see `MongooseServerSelectionError`, it's usually one of:
 
 ## License
 
-See [LICENSE](LICENSE)
+See [LICENSE](LICENSE).
